@@ -110,7 +110,7 @@ button { -webkit-tap-highlight-color: transparent; }
 }
 
 .memory-card:disabled { cursor: default; }
-.memory-card.is-selected { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-tone), transparent 25%); }
+.memory-card.is-selected { box-shadow: 0 0 0 8px color-mix(in srgb, var(--card-tone), transparent 25%); }
 .memory-card.is-removed { animation: remove-card 480ms ease forwards; pointer-events: none; }
 .memory-card.is-incorrect { animation: shake-card 500ms ease-in-out; }
 
