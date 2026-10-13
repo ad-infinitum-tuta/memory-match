@@ -2,7 +2,7 @@
 import 'fake-indexeddb/auto';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { libraryDatabase } from './data/database';
 import { saveLibraryItem } from './data/library';
@@ -21,6 +21,7 @@ async function clearLibrary() {
 beforeEach(clearLibrary);
 afterEach(async () => {
   cleanup();
+  vi.restoreAllMocks();
   await clearLibrary();
 });
 
@@ -90,6 +91,102 @@ describe('app vocabulary workflow', () => {
     expect(spanishCard.getAttribute('aria-pressed')).toBe('true');
     await user.click(spanishCard);
     expect(spanishCard.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('keeps matched audio cards playable', async () => {
+    const audioItem: VocabularyItem = {
+      id: 'cat',
+      definition: 'cat',
+      audioAssetId: 'cat-audio',
+      createdAt: '',
+      updatedAt: '',
+    };
+    const textItem: VocabularyItem = {
+      id: 'dog',
+      targetText: 'perro',
+      definition: 'dog',
+      createdAt: '',
+      updatedAt: '',
+    };
+    const audioAsset = {
+      id: 'cat-audio',
+      vocabularyItemId: audioItem.id,
+      type: 'audio' as const,
+      blob: new Blob(['audio-data'], { type: 'audio/mpeg' }),
+      fileName: 'cat.mp3',
+      mimeType: 'audio/mpeg',
+      fileSize: 10,
+      createdAt: '',
+    };
+    await saveLibraryItem(audioItem, [], [audioAsset], libraryDatabase);
+    await saveLibraryItem(textItem, [], [], libraryDatabase);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:cat-audio');
+    const playAudio = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await screen.findAllByRole('button', { name: 'Reveal card' });
+
+    const audioCard = await waitFor(() => {
+      const card = container.querySelector('audio')?.closest('.card-wrap')?.querySelector('.memory-card');
+      if (!(card instanceof HTMLButtonElement)) throw new Error('Audio card is not rendered yet.');
+      return card;
+    });
+    await user.click(audioCard as HTMLButtonElement);
+    const replayButton = await screen.findByRole('button', { name: 'Replay audio' });
+    expect(replayButton.querySelector('svg')).not.toBeNull();
+    await user.click(screen.getByText('cat').closest('.memory-card') as HTMLButtonElement);
+
+    expect(audioCard.classList.contains('is-matched')).toBe(true);
+    await waitFor(() => expect(replayButton.isConnected).toBe(true));
+    await user.click(replayButton);
+    expect(playAudio).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the replay icon when an audio card is selected second in Memory style', async () => {
+    const audioItem: VocabularyItem = {
+      id: 'cat',
+      definition: 'cat',
+      audioAssetId: 'cat-audio',
+      createdAt: '',
+      updatedAt: '',
+    };
+    const otherItem: VocabularyItem = {
+      id: 'dog',
+      targetText: 'perro',
+      definition: 'dog',
+      createdAt: '',
+      updatedAt: '',
+    };
+    const audioAsset = {
+      id: 'cat-audio',
+      vocabularyItemId: audioItem.id,
+      type: 'audio' as const,
+      blob: new Blob(['audio-data'], { type: 'audio/mpeg' }),
+      fileName: 'cat.mp3',
+      mimeType: 'audio/mpeg',
+      fileSize: 10,
+      createdAt: '',
+    };
+    await saveLibraryItem(audioItem, [], [audioAsset], libraryDatabase);
+    await saveLibraryItem(otherItem, [], [], libraryDatabase);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:cat-audio');
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const user = userEvent.setup();
+    const { container } = render(<App />);
+    await screen.findAllByRole('button', { name: 'Reveal card' });
+
+    const audioCard = await waitFor(() => {
+      const card = container.querySelector('audio')?.closest('.card-wrap')?.querySelector('.memory-card');
+      if (!(card instanceof HTMLButtonElement)) throw new Error('Audio card is not rendered yet.');
+      return card;
+    });
+    await user.click(screen.getByText('dog').closest('.memory-card') as HTMLButtonElement);
+    await user.click(audioCard as HTMLButtonElement);
+
+    expect(audioCard.classList.contains('is-incorrect')).toBe(true);
+    expect(audioCard.closest('.card-wrap')?.querySelector('.audio-replay svg')).not.toBeNull();
   });
 
   it('animates an incorrect Memory selection and flips both cards back after two seconds', async () => {

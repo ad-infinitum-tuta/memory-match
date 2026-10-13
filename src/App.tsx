@@ -329,11 +329,11 @@ function App() {
                         ref={(element) => { if (element) audioElements.current.set(card.id, element); else audioElements.current.delete(card.id); }}
                         src={mediaUrls[asset.id]}
                       />
-                      {isRevealed && !isLocked && !isMatched && (
+                      {(isRevealed && (!isLocked || isSelected)) || isMatched ? (
                         <button aria-label="Replay audio" className="audio-replay" onClick={() => playCardAudio(card)} title="Replay audio" type="button">
                           <Volume2 aria-hidden="true" />
                         </button>
-                      )}
+                      ) : null}
                     </>
                   )}
                 </div>
