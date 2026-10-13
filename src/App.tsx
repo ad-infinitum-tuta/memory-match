@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { RotateCcw, Settings, Volume2, X } from 'lucide-react';
 import { getLibrary, type LibrarySnapshot } from './data/library';
 import { generateGame } from './domain/game-generation';
@@ -30,6 +30,42 @@ function cardKind(card: GeneratedCard): string {
   return ({ targetText: 'Spanish', targetAudio: 'Audio', definition: 'Meaning', image: 'Image' })[card.representation];
 }
 
+function FittingCardText({ text }: { text: string }) {
+  const textRef = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const element = textRef.current;
+    if (!element) return;
+
+    const fitText = () => {
+      element.style.fontSize = '';
+      element.style.lineHeight = '';
+      let fontSize = Number.parseFloat(window.getComputedStyle(element).fontSize);
+      if (!Number.isFinite(fontSize) || element.clientHeight === 0) return;
+
+      while (
+        fontSize > 1 &&
+        (element.scrollHeight > element.clientHeight + 1 || element.scrollWidth > element.clientWidth + 1)
+      ) {
+        fontSize = Math.max(1, fontSize - 0.5);
+        element.style.fontSize = `${fontSize}px`;
+        element.style.lineHeight = `${Math.max(1, fontSize * 1.05)}px`;
+      }
+    };
+
+    fitText();
+    if (typeof ResizeObserver !== 'undefined') {
+      const observer = new ResizeObserver(fitText);
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+    window.addEventListener('resize', fitText);
+    return () => window.removeEventListener('resize', fitText);
+  }, [text]);
+
+  return <span className="card-word" ref={textRef}>{text}</span>;
+}
+
 function buildGame(library: LibrarySnapshot, settings: GameSettings): GenerationResult {
   return generateGame({
     items: library.items,
@@ -56,7 +92,7 @@ function App() {
   const mismatchTimeout = useRef<number | null>(null);
   const audioElements = useRef(new Map<string, HTMLAudioElement>());
   const activeAudioId = useRef<string | null>(null);
-  const mismatchWaitingForAudio = useRef(false);
+  const soundContext = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -73,6 +109,9 @@ function App() {
     return () => {
       isMounted = false;
       if (mismatchTimeout.current) window.clearTimeout(mismatchTimeout.current);
+      if (soundContext.current) {
+        void soundContext.current.close().catch((error: unknown) => console.error('Could not close game sound effects.', error));
+      }
     };
   }, []);
 
@@ -103,13 +142,16 @@ function App() {
     activeAudioId.current = card.id;
     void audio.play().catch(() => {
       if (activeAudioId.current === card.id) activeAudioId.current = null;
-      if (mismatchWaitingForAudio.current) scheduleMemoryMismatch();
     });
   };
 
+  const audioEnded = (cardId: string) => {
+    if (activeAudioId.current === cardId) activeAudioId.current = null;
+  };
+
   const finishMismatch = () => {
-    mismatchWaitingForAudio.current = false;
     mismatchTimeout.current = null;
+    stopActiveAudio();
     setSelectedIds([]);
     setIncorrectIds([]);
     setIsLocked(false);
@@ -120,15 +162,36 @@ function App() {
     mismatchTimeout.current = window.setTimeout(finishMismatch, 2000);
   };
 
-  const audioEnded = (cardId: string) => {
-    if (activeAudioId.current === cardId) activeAudioId.current = null;
-    if (mismatchWaitingForAudio.current) scheduleMemoryMismatch();
+  const playSoundEffect = (correct: boolean) => {
+    if (!settings.soundEffectsEnabled || !('AudioContext' in window)) return;
+
+    try {
+      const context = soundContext.current ?? new window.AudioContext();
+      soundContext.current = context;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const startTime = context.currentTime;
+      oscillator.type = correct ? 'sine' : 'triangle';
+      oscillator.frequency.setValueAtTime(correct ? 660 : 220, startTime);
+      if (correct) oscillator.frequency.setValueAtTime(880, startTime + 0.12);
+      gain.gain.setValueAtTime(0.0001, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.14, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + (correct ? 0.28 : 0.32));
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(startTime);
+      oscillator.stop(startTime + (correct ? 0.28 : 0.32));
+      if (context.state === 'suspended') {
+        void context.resume().catch((error: unknown) => console.error('Could not resume game sound effects.', error));
+      }
+    } catch (error) {
+      console.error('Could not play the game sound effect.', error);
+    }
   };
 
   const restart = (nextLibrary = library, nextSettings = settings) => {
     if (mismatchTimeout.current) window.clearTimeout(mismatchTimeout.current);
     stopActiveAudio();
-    mismatchWaitingForAudio.current = false;
     mismatchTimeout.current = null;
     setLibrary(nextLibrary);
     setSettings(nextSettings);
@@ -144,7 +207,13 @@ function App() {
   const revealCard = (card: GeneratedCard) => {
     const game = generation?.kind === 'ready' ? generation.game : undefined;
     const currentPairId = pairIdFor(card);
-    if (!game || isLocked || isComplete || (currentPairId && matchedPairIds.includes(currentPairId)) || selectedIds.includes(card.id)) return;
+    if (!game || isLocked || isComplete || (currentPairId && matchedPairIds.includes(currentPairId))) return;
+    if (settings.gameStyle === 'match' && selectedIds.includes(card.id)) {
+      setSelectedIds((currentIds) => currentIds.filter((id) => id !== card.id));
+      if (activeAudioId.current === card.id) stopActiveAudio();
+      return;
+    }
+    if (selectedIds.includes(card.id)) return;
     if (card.representation === 'targetAudio') playCardAudio(card);
 
     if (selectedIds.length === 0) {
@@ -160,6 +229,7 @@ function App() {
     const firstPairId = pairIdFor(firstCard);
 
     if (firstPairId && firstPairId === currentPairId) {
+      playSoundEffect(true);
       if (settings.gameStyle === 'match') {
         setScore((currentScore) => currentScore + 1);
         setMatchedPairIds((currentMatches) => [...currentMatches, firstPairId]);
@@ -172,6 +242,7 @@ function App() {
     }
 
     setIsLocked(true);
+    playSoundEffect(false);
     if (settings.gameStyle === 'match') {
       setIncorrectIds([firstCard.id, card.id]);
       mismatchTimeout.current = window.setTimeout(() => {
@@ -181,9 +252,8 @@ function App() {
       return;
     }
 
-    const activeAudio = activeAudioId.current ? audioElements.current.get(activeAudioId.current) : undefined;
-    mismatchWaitingForAudio.current = Boolean(activeAudio && !activeAudio.paused && [firstCard.id, card.id].includes(activeAudioId.current ?? ''));
-    if (!mismatchWaitingForAudio.current) scheduleMemoryMismatch();
+    setIncorrectIds([firstCard.id, card.id]);
+    scheduleMemoryMismatch();
   };
 
   const activeGame = generation?.kind === 'ready' ? generation.game : undefined;
@@ -227,7 +297,7 @@ function App() {
               const cardPairId = pairIdFor(card);
               const isMatched = Boolean(cardPairId && matchedPairIds.includes(cardPairId));
               const asset = card.assetId ? library.assets.find(({ id }) => id === card.assetId) : undefined;
-              const label = card.text ?? (card.representation === 'targetAudio' ? 'Listen' : card.representation === 'image' ? 'Image' : 'Vocabulary card');
+              const label = card.text ?? (card.representation === 'targetAudio' ? 'Audio card' : card.representation === 'image' ? 'Image' : 'Vocabulary card');
               return (
                 <div className="card-wrap" key={card.id} style={{ '--card-tone': CARD_TONES[index % CARD_TONES.length] } as React.CSSProperties}>
                   <button
@@ -243,7 +313,11 @@ function App() {
                     <span className="card-face card-front">
                       {card.representation === 'image' && asset && mediaUrls[asset.id]
                         ? <img alt="Vocabulary image" className="card-image" src={mediaUrls[asset.id]} />
-                        : <><span className="card-kind">{cardKind(card)}</span><span className="card-word">{label}</span></>}
+                        : card.representation !== 'targetAudio' && (
+                          card.representation === 'image'
+                            ? <span className="card-word">{label}</span>
+                            : <FittingCardText text={label} />
+                        )}
                     </span>
                   </span>
                   </button>
@@ -255,7 +329,7 @@ function App() {
                         ref={(element) => { if (element) audioElements.current.set(card.id, element); else audioElements.current.delete(card.id); }}
                         src={mediaUrls[asset.id]}
                       />
-                      {isSelected && !isLocked && !isMatched && (
+                      {isRevealed && !isLocked && !isMatched && (
                         <button aria-label="Replay audio" className="audio-replay" onClick={() => playCardAudio(card)} title="Replay audio" type="button">
                           <Volume2 aria-hidden="true" />
                         </button>

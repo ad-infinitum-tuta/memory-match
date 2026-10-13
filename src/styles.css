@@ -152,20 +152,20 @@ button { -webkit-tap-highlight-color: transparent; }
   transform: rotateY(180deg);
 }
 
-.card-kind {
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
 .card-word {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   max-width: 100%;
+  place-items: center;
+  overflow: hidden;
   color: var(--ink);
   font-size: clamp(14px, 2.5vw, 21px);
   font-weight: 800;
+  line-height: 1.1;
   overflow-wrap: anywhere;
+  text-align: center;
 }
 
 .card-image { width: 100%; height: 100%; object-fit: contain; }
@@ -173,22 +173,22 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .audio-replay {
   position: absolute;
-  right: 7px;
-  bottom: 7px;
+  z-index: 2;
+  inset: 50% auto auto 50%;
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: clamp(42px, 7vw, 58px);
+  height: clamp(42px, 7vw, 58px);
   place-items: center;
-  border: 1px solid #d6dce5;
+  border: 2px solid #d6dce5;
   border-radius: 50%;
   color: #405e94;
   background: #fff;
   cursor: pointer;
+  transform: translate(-50%, -50%);
 }
 
 .audio-replay:hover { color: #244c8a; background: #edf3fc; }
-.audio-replay svg { width: 16px; height: 16px; }
-.is-revealed ~ .audio-replay { z-index: 1; }
+.audio-replay svg { width: 27px; height: 27px; }
 
 .is-matched .card-front { animation: match-glow 680ms ease-out; }
 
@@ -430,8 +430,9 @@ button { -webkit-tap-highlight-color: transparent; }
   .card-grid { gap: 7px; }
   .memory-card { padding: 3px; border-radius: 7px; }
   .card-front { padding: 3px; }
-  .card-kind { font-size: 7px; }
   .card-word { font-size: clamp(12px, 4vw, 17px); }
+  .audio-replay { width: 46px; height: 46px; }
+  .audio-replay svg { width: 23px; height: 23px; }
   .game-controls { margin-top: 17px; }
 }
 

@@ -71,4 +71,47 @@ describe('app vocabulary workflow', () => {
     await user.click(screen.getByRole('button', { name: 'Meaning: moon' }));
     await waitFor(() => expect(screen.getByText('Score:').parentElement?.textContent).toContain('0'));
   });
+
+  it('deselects a selected card in Match style', async () => {
+    const items: VocabularyItem[] = [
+      { id: 'cat', targetText: 'gato', definition: 'cat', createdAt: '', updatedAt: '' },
+      { id: 'dog', targetText: 'perro', definition: 'dog', createdAt: '', updatedAt: '' },
+    ];
+    for (const item of items) await saveLibraryItem(item, [], [], libraryDatabase);
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findAllByRole('button', { name: 'Reveal card' });
+    await user.click(screen.getByRole('button', { name: 'Game settings' }));
+    await user.click(screen.getByRole('button', { name: 'Match' }));
+    await user.click(screen.getByRole('button', { name: 'Close settings' }));
+
+    const spanishCard = screen.getByRole('button', { name: 'Spanish: gato' });
+    await user.click(spanishCard);
+    expect(spanishCard.getAttribute('aria-pressed')).toBe('true');
+    await user.click(spanishCard);
+    expect(spanishCard.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('animates an incorrect Memory selection and flips both cards back after two seconds', async () => {
+    const items: VocabularyItem[] = [
+      { id: 'cat', targetText: 'gato', definition: 'cat', createdAt: '', updatedAt: '' },
+      { id: 'dog', targetText: 'perro', definition: 'dog', createdAt: '', updatedAt: '' },
+    ];
+    for (const item of items) await saveLibraryItem(item, [], [], libraryDatabase);
+    render(<App />);
+    await screen.findAllByRole('button', { name: 'Reveal card' });
+    const user = userEvent.setup();
+
+    const cardFor = (text: string) => screen.getByText(text).closest('.memory-card') as HTMLButtonElement;
+    await user.click(cardFor('gato'));
+    await user.click(cardFor('dog'));
+    expect(cardFor('gato').classList.contains('is-incorrect')).toBe(true);
+    expect(cardFor('dog').classList.contains('is-incorrect')).toBe(true);
+
+    await new Promise((resolve) => window.setTimeout(resolve, 1900));
+    expect(cardFor('gato').classList.contains('is-revealed')).toBe(true);
+    await new Promise((resolve) => window.setTimeout(resolve, 200));
+    expect(cardFor('gato').classList.contains('is-revealed')).toBe(false);
+    expect(cardFor('dog').classList.contains('is-revealed')).toBe(false);
+  }, 10_000);
 });
