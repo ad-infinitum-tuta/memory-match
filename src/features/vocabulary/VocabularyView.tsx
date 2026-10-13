@@ -67,10 +67,15 @@ export default function VocabularyView({ library, onLibraryChange, onClose }: Pr
   };
 
   const addAudioFile = async (file?: File) => {
-    if (!file) return;
+    if (!file) {
+      console.log('[VocabularyView] Audio file processing skipped: no file received.');
+      return;
+    }
+    console.log('[VocabularyView] Audio file processing started.', { name: file.name, type: file.type, size: file.size });
     setError('');
     const preliminary = validateMediaAsset({ type: 'audio', fileName: file.name, mimeType: file.type, fileSize: file.size });
     if (!preliminary.valid) {
+      console.log('[VocabularyView] Audio file rejected during preliminary validation.', { name: file.name, message: preliminary.message });
       setError(preliminary.message);
       return;
     }
@@ -90,16 +95,23 @@ export default function VocabularyView({ library, onLibraryChange, onClose }: Pr
         createdAt: new Date().toISOString(),
       };
       setMediaAssets((current) => [...current.filter(({ type }) => type !== 'audio'), asset]);
+      console.log('[VocabularyView] Audio file processed and added to form state.', { name: asset.fileName, durationSeconds: asset.durationSeconds });
     } catch (cause) {
+      console.error('[VocabularyView] Audio file processing failed.', { name: file.name, cause });
       setError(cause instanceof Error ? cause.message : 'This audio file could not be processed.');
     }
   };
 
   const addImageFile = async (file?: File) => {
-    if (!file) return;
+    if (!file) {
+      console.log('[VocabularyView] Image file processing skipped: no file received.');
+      return;
+    }
+    console.log('[VocabularyView] Image file processing started.', { name: file.name, type: file.type, size: file.size });
     setError('');
     const validation = validateMediaAsset({ type: 'image', fileName: file.name, mimeType: file.type, fileSize: file.size });
     if (!validation.valid) {
+      console.log('[VocabularyView] Image file rejected during validation.', { name: file.name, message: validation.message });
       setError(validation.message);
       return;
     }
@@ -118,7 +130,9 @@ export default function VocabularyView({ library, onLibraryChange, onClose }: Pr
         createdAt: new Date().toISOString(),
       };
       setMediaAssets((current) => [...current.filter(({ type }) => type !== 'image'), asset]);
+      console.log('[VocabularyView] Image file processed and added to form state.', { name: asset.fileName, type: asset.mimeType, size: asset.fileSize });
     } catch (cause) {
+      console.error('[VocabularyView] Image file processing failed.', { name: file.name, cause });
       setError(cause instanceof Error ? cause.message : 'This image could not be processed.');
     }
   };
@@ -325,7 +339,13 @@ export default function VocabularyView({ library, onLibraryChange, onClose }: Pr
 
             <label className="upload-field">
               <span>Target-language audio</span>
-              <input accept="audio/mp3,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/ogg,audio/webm,.m4a" onChange={(event) => { void addAudioFile(event.target.files?.[0]); event.target.value = ''; }} type="file" />
+              <input accept="audio/mp3,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/ogg,audio/webm,.m4a" onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                console.log('[VocabularyView] Audio file selected in input.', { name: file?.name, type: file?.type, size: file?.size, filesCount: event.currentTarget.files?.length ?? 0 });
+                void addAudioFile(file);
+                event.currentTarget.value = '';
+                console.log('[VocabularyView] Audio input value cleared after selection.');
+              }} type="file" />
               {mediaAssets.find(({ type }) => type === 'audio') && (
                 <span className="selected-media">
                   {mediaAssets.find(({ type }) => type === 'audio')?.fileName}
@@ -335,7 +355,13 @@ export default function VocabularyView({ library, onLibraryChange, onClose }: Pr
             </label>
             <label className="upload-field">
               <span>Image</span>
-              <input accept="image/jpeg,image/png,image/webp,image/heic,.heic" onChange={(event) => { void addImageFile(event.target.files?.[0]); event.target.value = ''; }} type="file" />
+              <input accept="image/jpeg,image/png,image/webp,image/heic,.heic" onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                console.log('[VocabularyView] Image file selected in input.', { name: file?.name, type: file?.type, size: file?.size, filesCount: event.currentTarget.files?.length ?? 0 });
+                void addImageFile(file);
+                event.currentTarget.value = '';
+                console.log('[VocabularyView] Image input value cleared after selection.');
+              }} type="file" />
               {mediaAssets.find(({ type }) => type === 'image') && (
                 <span className="selected-media">
                   {mediaAssets.find(({ type }) => type === 'image')?.fileName}

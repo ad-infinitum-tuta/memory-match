@@ -636,8 +636,8 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .form-field textarea { min-height: 63px; resize: vertical; }
 .upload-field { display: grid; gap: 6px; color: #465365; font-size: 12px; font-weight: 800; }
-.upload-field input { width: 100%; min-width: 0; color: #687688; font-size: 12px; }
-.upload-field input::file-selector-button { margin-right: 8px; padding: 7px 9px; border: 1px solid #d4dbe4; border-radius: 4px; color: #3d5f91; background: #f5f7fa; font: inherit; cursor: pointer; }
+.upload-field input { width: 100%; min-width: 0; color: #687688; font-size: 0; }
+.upload-field input::file-selector-button { margin-right: 8px; padding: 7px 9px; border: 1px solid #d4dbe4; border-radius: 4px; color: #3d5f91; background: #f5f7fa; font: inherit; font-size: 12px; cursor: pointer; }
 .selected-media { display: flex; align-items: center; justify-content: space-between; gap: 8px; overflow-wrap: anywhere; color: #566273; font-size: 11px; font-weight: 600; }
 .selected-media button { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 50%; color: #637084; background: transparent; cursor: pointer; }
 .selected-media button:hover { color: #b64155; background: #fae9ec; }
